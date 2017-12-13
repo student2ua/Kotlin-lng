@@ -5,6 +5,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.SchemaUtils.create
 import org.jetbrains.exposed.sql.SchemaUtils.drop
 
+//https
+// ://medium.com/@OhadShai/first-steps-with-kotlin-exposed-cb361a9bf5ac
 object Users : Table() {
     val id = varchar("id", 10).primaryKey() // Column<String>
     val name = varchar("name", length = 50) // Column<String>
@@ -21,7 +23,7 @@ fun main(args: Array<String>) {
 
     transaction {
         logger.addLogger(StdOutSqlLogger)
-        create (Cities, Users)
+        create(Cities, Users)
 
         val saintPetersburgId = Cities.insert {
             it[name] = "St. Petersburg"
@@ -65,11 +67,31 @@ fun main(args: Array<String>) {
             it[cityId] = null
         }
 
-        Users.update({Users.id eq "alex"}) {
+        Users.update({ Users.id eq "alex" }) {
             it[name] = "Alexey"
         }
 
-        Users.deleteWhere{Users.name like "%thing"}
+        Users.deleteWhere { Users.name like "%thing" }
+//--------- batch
+
+        val cityNames = listOf("Paris", "Moscow", "Helsinki")
+        val allCitiesID = Cities.batchInsert(cityNames) { name ->
+            this[Cities.name] = name
+        }
+        val userNamesWithCityIds = allCitiesID.mapIndexed { index, id ->
+            "UserFrom${cityNames[index]}" to id[Cities.id] as Number
+        }
+        println("userNamesWithCityIds= " + userNamesWithCityIds)
+        val generatedIds = Users.batchInsert(userNamesWithCityIds) { (userName, cityId) ->
+
+            this[Users.id] = java.util.Random().nextInt().toString().take(6)
+
+            this[Users.name] = userName
+
+            this[Users.cityId] = cityId.toInt()
+
+        }
+
 
         println("All cities:")
 
@@ -79,8 +101,10 @@ fun main(args: Array<String>) {
 
         println("Manual join:")
         (Users innerJoin Cities).slice(Users.name, Cities.name).
-                select {(Users.id.eq("andrey") or Users.name.eq("Sergey")) and
-                        Users.id.eq("sergey") and Users.cityId.eq(Cities.id)}.forEach {
+                select {
+                    (Users.id.eq("andrey") or Users.name.eq("Sergey")) and
+                            Users.id.eq("sergey") and Users.cityId.eq(Cities.id)
+                }.forEach {
             println("${it[Users.name]} lives in ${it[Cities.name]}")
         }
 
@@ -88,11 +112,10 @@ fun main(args: Array<String>) {
 
 
         (Users innerJoin Cities).slice(Users.name, Users.cityId, Cities.name).
-                select {Cities.name.eq("St. Petersburg") or Users.cityId.isNull()}.forEach {
+                select { Cities.name.eq("St. Petersburg") or Users.cityId.isNull() }.forEach {
             if (it[Users.cityId] != null) {
                 println("${it[Users.name]} lives in ${it[Cities.name]}")
-            }
-            else {
+            } else {
                 println("${it[Users.name]} lives nowhere")
             }
         }
@@ -110,7 +133,7 @@ fun main(args: Array<String>) {
             }
         }
 
-        drop (Users, Cities)
+        drop(Users, Cities)
 
     }
 }
